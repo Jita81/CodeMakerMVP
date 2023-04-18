@@ -6,7 +6,7 @@ import datetime
 
 
 # Replace with your OpenAI API key
-openai.api_key = "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"
+openai.api_key = "XXXXXXXXX
 
 
 
