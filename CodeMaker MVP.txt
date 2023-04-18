@@ -1,0 +1,266 @@
+import openai
+import os
+import re
+import logging
+import datetime
+
+
+# Replace with your OpenAI API key
+openai.api_key = "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"
+
+
+
+folder_structure = [
+    ('safety_checker', 'folder', None),
+    ('safety_checker/frontend', 'folder', None),
+    ('safety_checker/frontend/src', 'folder', None),
+    ('safety_checker/frontend/src/components', 'folder', None),
+    ('safety_checker/frontend/src/components/auth', 'folder', None),
+    ('safety_checker/frontend/src/components/auth/LoginForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/auth/RegisterForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/auth/ResetPasswordForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard', 'folder', None),
+    ('safety_checker/frontend/src/components/dashboard/Dashboard.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ApiKeyList.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ApiKeyForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ProfileForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout', 'folder', None),
+    ('safety_checker/frontend/src/components/layout/MainLayout.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout/TopAppBar.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout/SideDrawer.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/shared', 'folder', None),
+    ('safety_checker/frontend/src/components/shared/PrivateRoute.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/App.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/package.json', 'file', 'JSON'),
+    ('safety_checker/backend', 'folder', None),
+    ('safety_checker/backend/app', 'folder', None),
+    ('safety_checker/backend/app/main.py', 'file', 'Python'),
+    ('safety_checker/backend/app/models.py', 'file', 'Python'),
+    ('safety_checker/backend/app/auth.py', 'file', 'Python'),
+    ('safety_checker/backend/app/api_keys.py', 'file', 'Python'),
+    ('safety_checker/backend/app/safety_check.py', 'file', 'Python'),
+    ('safety_checker/backend/app/custom_llm.py', 'file', 'Python'),
+    ('safety_checker/backend/Dockerfile', 'file', 'Dockerfile'),
+    ('safety_checker/backend/requirements.txt', 'file', 'Text'),
+    ('safety_checker/kubernetes', 'folder', None),
+    ('safety_checker/kubernetes/deployment.yaml', 'file', 'YAML'),
+    ('safety_checker/kubernetes/service.yaml', 'file', 'YAML'),
+    ('safety_checker/docker-compose.yml', 'file', 'YAML')
+]
+
+
+
+
+# Replace this prompt template with your desired one
+prompt_template = """
+
+You must answer the following question from the perspective of a genius wordclass expert in all of the disciplines needed for this question based on the information after the semi colon.
+
+Provide the full and complete content for {filename} which is a {filetype} file. You must provide the content for the file within a specific pattern. This pattern assumes that the content block starts and ends with triple backticks (```). This convention MUST be met.
+
+:
+
+Title: AI Safety Checker API
+
+Objective: Develop a cloud-based AI safety checker API using a custom-trained large language model (LLM) to ensure generated responses comply with the three laws of robotics. The API must be highly scalable, with a web front-end for user account management, API key generation, and usage monitoring.
+
+I. Functional Requirements:
+
+1.1 User Authentication:
+a. User registration with email, password, and optional company name.
+b. Login functionality with email and password.
+c. Password reset functionality through email verification.
+d. Secure password storage using hashing and salting.
+e. Access control based on user authentication.
+
+1.2 User Account Management:
+a. Personalized dashboard for monitoring usage statistics (number of requests, usage over time).
+b. API key generation and management.
+c. Create new API keys with optional description.
+d. View a list of all API keys with descriptions, creation dates, and usage statistics.
+e. Revoke or delete API keys.
+f. User profile management (update email, password, company name).
+g. Usage limits and billing information (for future implementation).
+
+1.3 AI Safety Checker API:
+a. Secure API endpoint to accept requests from LLMs using API keys for authentication.
+b. Process requests using the custom-trained LLM, taking input text and generating safety check results.
+c. Return safety check results in JSON format (safe or not safe, additional information about safety concerns).
+d. Rate limiting for API requests to prevent abuse and ensure fair usage.
+
+1.4 Custom-Trained LLM:
+a. Train an LLM using OpenAI's GPT architecture with data specific to the safety use case, including examples of safe and unsafe content.
+b. Continuously improve the LLM through retraining with new data and feedback from users.
+c. Ensure low latency and high accuracy for the safety checker.
+
+1.5 Web Front-End:
+a. Responsive and accessible design for desktop and mobile devices.
+b. User-friendly interface for account management, API key generation, and usage monitoring.
+c. Help and support resources, such as FAQ and contact information.
+
+II. Non-Functional Requirements:
+
+2.1 Scalability:
+a. Support millions of requests per second while maintaining low latency.
+b. Optimize for low initial usage with the ability to scale up as needed.
+c. Utilize cloud-based infrastructure for flexible resource allocation.
+
+2.2 Security:
+a. Secure user authentication using JWT or OAuth.
+b. Encrypted communication using HTTPS.
+c. Secure data storage and API key handling.
+d. Regular security audits and updates.
+
+2.3 Performance:
+a. Fast response times for API requests.
+b. Efficient use of resources to minimize cost and environmental impact.
+c. Load balancing and caching for optimal performance.
+
+2.4 Maintainability:
+a. Modular and well-documented code for easy updates and maintenance.
+b. Version control using Git and continuous integration/continuous deployment (CI/CD) pipelines.
+c. Regular software updates, bug fixes, and feature additions.
+
+2.5 Monitoring and Analytics:
+a. Real-time monitoring of system health, including API latency, error rates, and resource usage.
+b. Log aggregation and analysis for debugging and performance optimization.
+c. User analytics to understand usage patterns and identify potential improvements.
+
+III. Code Structure:
+
+folder_structure = [
+    ('safety_checker', 'folder', None),
+    ('safety_checker/frontend', 'folder', None),
+    ('safety_checker/frontend/src', 'folder', None),
+    ('safety_checker/frontend/src/components', 'folder', None),
+    ('safety_checker/frontend/src/components/auth', 'folder', None),
+    ('safety_checker/frontend/src/components/auth/LoginForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/auth/RegisterForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/auth/ResetPasswordForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard', 'folder', None),
+    ('safety_checker/frontend/src/components/dashboard/Dashboard.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ApiKeyList.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ApiKeyForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/dashboard/ProfileForm.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout', 'folder', None),
+    ('safety_checker/frontend/src/components/layout/MainLayout.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout/TopAppBar.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/layout/SideDrawer.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/components/shared', 'folder', None),
+    ('safety_checker/frontend/src/components/shared/PrivateRoute.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/src/App.js', 'file', 'JavaScript'),
+    ('safety_checker/frontend/package.json', 'file', 'JSON'),
+    ('safety_checker/backend', 'folder', None),
+    ('safety_checker/backend/app', 'folder', None),
+    ('safety_checker/backend/app/main.py', 'file', 'Python'),
+    ('safety_checker/backend/app/models.py', 'file', 'Python'),
+    ('safety_checker/backend/app/auth.py', 'file', 'Python'),
+    ('safety_checker/backend/app/api_keys.py', 'file', 'Python'),
+    ('safety_checker/backend/app/safety_check.py', 'file', 'Python'),
+    ('safety_checker/backend/app/custom_llm.py', 'file', 'Python'),
+    ('safety_checker/backend/Dockerfile', 'file', 'Dockerfile'),
+    ('safety_checker/backend/requirements.txt', 'file', 'Text'),
+    ('safety_checker/kubernetes', 'folder', None),
+    ('safety_checker/kubernetes/deployment.yaml', 'file', 'YAML'),
+    ('safety_checker/kubernetes/service.yaml', 'file', 'YAML'),
+    ('safety_checker/docker-compose.yml', 'file', 'YAML')
+]
+
+
+
+IV. Improvements:
+
+4.1 Use Material-UI for a consistent, modern, and responsive design.
+4.2 Implement a state management solution like Redux to maintain a single source of truth for application state.
+4.3 Implement role-based access control (RBAC) for enhanced security and access management.
+4.4 Add internationalization (i18n) support to cater to a global audience.
+4.5 Provide real-time notifications for important events (e.g., API key changes, account updates).
+4.6 Add a GraphQL API for efficient data fetching and real-time updates using subscriptions.
+4.7 Use WebSockets for real-time communication between clients and server.
+4.8 Implement server-side rendering (SSR) for better performance and SEO.
+4.9 Add unit and integration tests using Jest and React Testing Library to ensure code quality and avoid regressions.
+4.10 Utilize a Content Delivery Network (CDN) to serve static assets and improve load times for users worldwide.
+
+V. Conclusion:
+
+The provided code, along with the suggested improvements, achieves the project's goals as specified in the requirements document. The implementation covers functional and non-functional requirements, such as user authentication, account management, API key management, custom LLM training, web front-end, scalability, security, performance, maintainability, and monitoring. With these features and improvements, the AI Safety Checker API will provide a robust, secure, and user-friendly solution for users to ensure their AI-generated content complies with the three laws of robotics.
+
+"""
+
+timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+logfolder = f"logs/{timestamp}"
+os.makedirs(logfolder, exist_ok=True)
+
+def create_folders_and_files(structure):
+    for folder_location, file_or_folder, file_type in structure:
+        if file_or_folder == 'folder':
+            os.makedirs(folder_location, exist_ok=True)
+        elif file_or_folder == 'file':
+            create_file(folder_location, file_type)
+
+def create_file(path, file_type):
+    filename = os.path.basename(path)
+    prompt = prompt_template.format(filename=filename, filetype=file_type)
+    response, response_text = generate_code(prompt)
+    
+    log_api_messages(path, prompt, response, response_text)
+
+    code = extract_code(response_text)
+
+    print(f"Writing code to {path}:")  # Debugging line
+    print(code)                       # Debugging line
+    
+    with open(path, 'w') as file:
+        file.write(code)
+
+
+def generate_code(prompt):
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=prompt,
+            temperature=0.9,
+            max_tokens=2000,
+            top_p=0.9,
+            frequency_penalty=0.0,
+            presence_penalty=0.0
+        )
+
+        return response, response.choices[0].text.strip()
+    except Exception as e:
+        logging.error(f"Error while generating code for prompt: {prompt}\nError: {e}")
+        return None, ""
+
+
+def extract_code(response_text):
+    code_pattern = re.compile(r'```(?:python|javascript|json|dockerfile|yaml|text)?\n(.*?)\n```', re.DOTALL)
+    code_match = code_pattern.search(response_text)
+
+    if code_match:
+        return code_match.group(1).strip()
+    else:
+        logging.error(f"No code found in the response: {response_text}")
+        return ""
+
+def log_api_messages(file_path, prompt, response, response_text):
+    log_file_name = os.path.basename(file_path) + ".log"
+    log_file_path = os.path.join(logfolder, log_file_name)
+    
+    with open(log_file_path, 'w') as log_file:
+        log_file.write("=== Outgoing API Message ===\n")
+        log_file.write(prompt)
+        log_file.write("\n\n=== Incoming API Message ===\n")
+        log_file.write(str(response))
+        log_file.write("\n\n=== Extracted Text ===\n")
+        log_file.write(response_text)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("debug.log"),
+        logging.StreamHandler()
+    ]
+)
+
+create_folders_and_files(folder_structure)
